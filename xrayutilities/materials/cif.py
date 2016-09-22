@@ -218,9 +218,12 @@ class CIFFile(object):
             x = a[1][0]
             y = a[1][1]
             z = a[1][2]
-            el = re.sub(r"['\"]", r"", a[0])
+            el = a[0][:2]
+            el = re.sub(r"['\"]", r"", el)
             el = re.sub(r"([0-9])", r"", el)
             el = re.sub(r"\(\w*\)", r"", el)
+            el = re.sub(r"['+]", r"", el)
+            el = re.sub(r"['-]", r"", el)
             for symop in self.symops:
                 pos = eval("numpy.array(" + symop + ")")
                 # check that position is within unit cell
