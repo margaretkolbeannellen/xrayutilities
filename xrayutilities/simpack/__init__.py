@@ -38,6 +38,12 @@ from .models import SpecularReflectivityModel
 from .models import SimpleDynamicalCoplanarModel
 from .models import DynamicalModel
 
+from .darwin_theory import GradedBuffer
+from .darwin_theory import DarwinModel
+from .darwin_theory import DarwinModelSiGe001
+from .darwin_theory import DarwinModelGaInAs001
+from .darwin_theory import DarwinModelAlGaAs001
+
 from .fit import fit_xrr
 
 from .helpers import coplanar_alphai
