@@ -55,7 +55,7 @@ class CIFFile(object):
     structure are parsed from the CIF file
     """
 
-    def __init__(self, filename, digits=3):
+    def __init__(self,filename, digits=3,fid=None):
         """
         initialization of the CIFFile class
 
@@ -68,10 +68,13 @@ class CIFFile(object):
         self.filename = filename
         self.digits = digits
 
-        try:
-            self.fid = open(self.filename, "rb")
-        except:
-            raise IOError("cannot open CIF file %s" % self.filename)
+        if fid:
+           self.fid = fid
+        else:
+            try:
+                self.fid = open(self.filename, "rb")
+            except:
+                raise IOError("cannot open CIF file %s" % self.filename)
 
         self.Parse()
         self.SymStruct()
