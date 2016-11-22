@@ -475,7 +475,7 @@ class Crystal(Material):
             self.thetaDebye = thetaDebye
 
     @classmethod
-    def fromCIF(cls, ciffilename):
+    def fromCIF(cls, ciffilename,fid=None):
         """
         Create a Crystal from a CIF file. Name and
 
@@ -487,7 +487,7 @@ class Crystal(Material):
         -------
          Crystal instance
         """
-        cf = cif.CIFFile(ciffilename)
+        cf = cif.CIFFile(ciffilename,fid=fid)
         lat = cf.Lattice()
         return cls(cf.name, lat)
 
