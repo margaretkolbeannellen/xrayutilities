@@ -214,7 +214,7 @@ class CIFFile(object):
         in the unit cell for the different types of atoms. The data
         are obtained from the data parsed from the CIF file.
         """
-
+        
         self.unique_positions = []
         for a in self.atoms:
             unique_pos = []
