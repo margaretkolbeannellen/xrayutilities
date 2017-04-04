@@ -14,7 +14,7 @@
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
 # Copyright (C) 2009 Eugen Wintersberger <eugen.wintersberger@desy.de>
-# Copyright (C) 2009-2016 Dominik Kriegner <dominik.kriegner@gmail.com>
+# Copyright (C) 2009-2017 Dominik Kriegner <dominik.kriegner@gmail.com>
 
 """
 module handling crystal lattice structures. A Lattice consists of unit cell
@@ -22,13 +22,14 @@ parameters and a LatticeBase. It offers methods to calculate the reciprocal
 space position of Bragg peaks and their structure factor.
 """
 
-import numpy
 import numbers
+import warnings
 
-from .atom import Atom
-from .. import math
-from .. import config
+import numpy
+
+from .. import config, math
 from ..exception import InputError
+from .atom import Atom
 
 
 class LatticeBase(list):
@@ -74,17 +75,15 @@ class LatticeBase(list):
             raise TypeError("atom must be an instance of class "
                             "xrayutilities.materials.Atom!")
 
-        if isinstance(pos, (list, tuple)):
-            p = numpy.array(pos, dtype=numpy.double)
-        elif isinstance(pos, numpy.ndarray):
-            p = pos
+        if isinstance(pos, (list, tuple, numpy.ndarray)):
+            p = numpy.asarray(pos, dtype=numpy.double)
         else:
             raise TypeError("point must be a list or numpy array of shape (3)")
 
         if not isinstance(occ, numbers.Number):
             raise TypeError("occupation (occ) must be a numerical value")
         if not isinstance(b, numbers.Number):
-            raise TypeError("occupation (occ) must be a numerical value")
+            raise TypeError("DW-exponent (b) must be a numerical value")
 
         list.__setitem__(self, key, (atom, p, float(occ), float(b)))
 
@@ -108,9 +107,12 @@ class Lattice(object):
     """
 
     def __init__(self, a1, a2, a3, base=None):
-        self._ai = numpy.identity(3)
-        self.a1 = a1
-        self.a2 = a2
+        warnings.warn("deprecated class -> change to SGLattice",
+                      DeprecationWarning)
+
+        self._ai = numpy.empty((3, 3))
+        self._ai[0, :] = a1
+        self._ai[1, :] = a2
         self.a3 = a3
 
         if base is not None:
@@ -136,19 +138,19 @@ class Lattice(object):
 
     @a1.setter
     def a1(self, value):
-        self._setlat(1, value)
+        self._setlat(0, value)
 
     @a2.setter
     def a2(self, value):
-        self._setlat(2, value)
+        self._setlat(1, value)
 
     @a3.setter
     def a3(self, value):
-        self._setlat(3, value)
+        self._setlat(2, value)
 
     def _setlat(self, i, value):
         if isinstance(value, (list, tuple, numpy.ndarray)):
-            self._ai[i-1, :] = value[:]
+            self._ai[i, :] = value[:]
         else:
             raise TypeError("a%d must be a list, tuple or a numpy array" % i)
         self.transform = math.Transform(self._ai.T)
@@ -232,8 +234,6 @@ class Lattice(object):
         """
         if len(args) < 3:
             args = args[0]
-            if len(args) < 3:
-                raise InputError("need 3 indices for the lattice point")
 
         return self.transform(args)
 
@@ -851,15 +851,15 @@ def MagnetiteLattice(aa, ab, ac, a, x=0.255):
     return CubicLattice(a, base=lb)
 
 
-def LaB6Lattice(aa, ab, a):
+def LaB6Lattice(aa, ab, a, oa=1, ob=1, ba=0, bb=0):
     lb = LatticeBase()
     # La
-    lb.append(aa, [0.0, 0.0, 0.0])
+    lb.append(aa, [0.0, 0.0, 0.0], oa, ba)
     # B
-    lb.append(ab, [0.80146, 0.50000, 0.50000])
-    lb.append(ab, [0.50000, 0.80146, 0.50000])
-    lb.append(ab, [0.50000, 0.50000, 0.80146])
-    lb.append(ab, [0.50000, 0.50000, 0.19854])
-    lb.append(ab, [0.50000, 0.19854, 0.50000])
-    lb.append(ab, [0.19854, 0.50000, 0.50000])
+    lb.append(ab, [0.80146, 0.50000, 0.50000], ob, bb)
+    lb.append(ab, [0.50000, 0.80146, 0.50000], ob, bb)
+    lb.append(ab, [0.50000, 0.50000, 0.80146], ob, bb)
+    lb.append(ab, [0.50000, 0.50000, 0.19854], ob, bb)
+    lb.append(ab, [0.50000, 0.19854, 0.50000], ob, bb)
+    lb.append(ab, [0.19854, 0.50000, 0.50000], ob, bb)
     return CubicLattice(a, base=lb)

@@ -857,9 +857,10 @@ class QConversion(object):
 
         for k in kwargs.keys():
             if k not in ['Nav', 'roi']:
-                raise Exception("unknown keyword argument given: allowed are "
-                                "'Nav': number of channels for block-average, "
-                                "'roi': region of interest")
+                raise Exception("unknown keyword argument (%s) given: allowed "
+                                "are 'Nav': number of channels for "
+                                "block-average, 'roi': region of interest"
+                                % k)
 
         # detectorDir
         if not isinstance(detectorDir1, basestring) or len(detectorDir1) != 2:
@@ -1321,16 +1322,12 @@ class Experiment(object):
                                 "'qconv': reciprocal space conversion, "
                                 "'sampleor': sample orientation")
 
-        if isinstance(ipdir, (list, tuple)):
-            self.idir = math.VecUnit(numpy.array(ipdir, dtype=numpy.double))
-        elif isinstance(ipdir, numpy.ndarray):
+        if isinstance(ipdir, (list, tuple, numpy.ndarray)):
             self.idir = math.VecUnit(ipdir)
         else:
             raise TypeError("Inplane direction must be list or numpy array")
 
-        if isinstance(ndir, (list, tuple)):
-            self.ndir = math.VecUnit(numpy.array(ndir, dtype=numpy.double))
-        elif isinstance(ndir, numpy.ndarray):
+        if isinstance(ndir, (list, tuple, numpy.ndarray)):
             self.ndir = math.VecUnit(ndir)
         else:
             raise TypeError("normal direction must be list or numpy array")
@@ -1449,7 +1446,7 @@ class Experiment(object):
         self._t2 = math.CoordinateTransform(xi, yi, zi)
 
         self._transform = math.Transform(
-            numpy.dot(self._t2.imatrix, self._t1.matrix))
+            numpy.dot(numpy.linalg.inv(self._t2.matrix), self._t1.matrix))
 
     def _set_energy(self, energy):
         self._en = utilities.energy(energy)
@@ -1473,13 +1470,7 @@ class Experiment(object):
     wavelength = property(_get_wavelength, _set_wavelength)
 
     def _set_inplane_direction(self, dir):
-        if isinstance(dir, list):
-            self.idir = numpy.array(dir, dtype=numpy.double)
-        elif isinstance(dir, numpy.ndarray):
-            self.idir = dir
-        else:
-            raise TypeError("Inplane direction must be list or numpy array")
-
+        self.idir = math.VecUnit(dir)
         v1 = numpy.cross(self.ndir, self.idir)
         self._set_transform(v1, self.idir, self.ndir, self._sampleor)
 
@@ -1487,13 +1478,7 @@ class Experiment(object):
         return self.idir
 
     def _set_normal_direction(self, dir):
-        if isinstance(dir, list):
-            self.ndir = numpy.array(dir, dtype=numpy.double)
-        elif isinstance(dir, numpy.ndarray):
-            self.ndir = dir
-        else:
-            raise TypeError("Surface normal must be list or numpy array")
-
+        self.ndir = math.VecUnit(dir)
         v1 = numpy.cross(self.ndir, self.idir)
         self._set_transform(v1, self.idir, self.ndir, self._sampleor)
 
@@ -2334,156 +2319,23 @@ class GISAXS(Experiment):
         pass
 
 
-class Powder(Experiment):
-
+class PowderExperiment(Experiment):
     """
-    Experimental class for powder diffraction
-    This class is able to simulate a powder spectrum for the given material
+    Experimental class for powder diffraction which helps to convert theta
+    angles to momentum transfer space
     """
-
-    def __init__(self, mat, **kwargs):
+    def __init__(self, **kwargs):
         """
-        the class is initialized with a xrayutilities.materials.Crystal
-        instance and calculates the powder intensity and peak positions of the
-        Crystal up to an angle of tt_cutoff. Results are stored in
-
-            data .... array with intensities
-            ang ..... Bragg angles of the peaks (Theta!)
-            qpos .... reciprocal space position of intensities
+        class constructor which takes the same keyword arguments as the
+        Experiment class
 
         Parameters
         ----------
-         mat:        xrayutilities.material.Crystal instance
-                     giving the material for the experimental class
          kwargs:     optional keyword arguments
-                     same as for the Experiment base class +
-          tt_cutoff: Powder peaks are calculated up to an scattering angle of
-                     tt_cutoff (deg)
+                     same as for the Experiment base class
         """
-        if isinstance(mat, materials.Crystal):
-            self.mat = mat
-        else:
-            raise TypeError("mat must be an instance of class "
-                            "xrayutilities.materials.Crystal")
-
-        self._tt_cutoff = kwargs.get('tt_cutoff', 180)
-        if 'tt_cutoff' in kwargs:
-            kwargs.pop('tt_cutoff')
-
-        # number of significant digits, needed to identify equal floats
-        self.digits = 5
-        self.qpos = None
-
         Experiment.__init__(self, [0, 1, 0], [0, 0, 1], **kwargs)
-        self.PowderIntensity(self._tt_cutoff)
-
-    def PowderIntensity(self, tt_cutoff=180):
-        """
-        Calculates the powder intensity and positions up to an angle of
-        tt_cutoff (deg) and stores the result in:
-
-            data .... array with intensities
-            ang ..... Bragg angles of the peaks (Theta!)
-            qpos .... reciprocal space position of intensities
-        """
-
-        # calculate maximal Bragg indices
-        hmax = int(numpy.ceil(norm(self.mat.lattice.a1) *
-                   self.k0 / numpy.pi *
-                   numpy.sin(numpy.radians(tt_cutoff / 2.))))
-        hmin = -hmax
-        kmax = int(numpy.ceil(norm(self.mat.lattice.a2) *
-                   self.k0 / numpy.pi *
-                   numpy.sin(numpy.radians(tt_cutoff / 2.))))
-        kmin = -kmax
-        lmax = int(numpy.ceil(norm(self.mat.lattice.a3) *
-                   self.k0 / numpy.pi *
-                   numpy.sin(numpy.radians(tt_cutoff / 2.))))
-        lmin = -lmax
-
-        if config.VERBOSITY >= config.INFO_ALL:
-            print("XU.Powder.PowderIntensity: tt_cutoff; (hmax,kmax,lmax): "
-                  "%6.2f (%d,%d,%d)" % (tt_cutoff, hmax, kmax, lmax))
-
-        qlist = []
-        qabslist = []
-        hkllist = []
-        qmax = numpy.sqrt(2) * self.k0 * numpy.sqrt(
-            1 - numpy.cos(numpy.radians(tt_cutoff)))
-        # calculate structure factor for each reflex
-        for h in range(hmin, hmax + 1):
-            for k in range(kmin, kmax + 1):
-                for l in range(lmin, lmax + 1):
-                    q = self.mat.Q(h, k, l)
-                    if norm(q) < qmax:
-                        qlist.append(q)
-                        hkllist.append([h, k, l])
-                        qabslist.append(numpy.round(norm(q), self.digits))
-
-        qabs = numpy.array(qabslist, dtype=numpy.double)
-        s = self.mat.StructureFactorForQ(qlist, self.energy)
-        r = numpy.absolute(s) ** 2
-
-        _tmp_data = numpy.zeros(r.size, dtype=[('q', numpy.double),
-                                               ('r', numpy.double),
-                                               ('hkl', list)])
-        _tmp_data['q'] = qabs
-        _tmp_data['r'] = r
-        _tmp_data['hkl'] = hkllist
-        # sort the list and compress equal entries
-        _tmp_data.sort(order='q')
-
-        self.qpos = [0]
-        self.data = [0]
-        self.hkl = [[0, 0, 0]]
-        for r in _tmp_data:
-            if r[0] == self.qpos[-1]:
-                self.data[-1] += r[1]
-            elif numpy.round(r[1], self.digits) != 0.:
-                self.qpos.append(r[0])
-                self.data.append(r[1])
-                self.hkl.append(r[2])
-
-        # cat first element to get rid of q = [0,0,0] divergence
-        self.qpos = numpy.array(self.qpos[1:], dtype=numpy.double)
-        self.ang = self.Q2Ang(self.qpos)
-        self.data = numpy.array(self.data[1:], dtype=numpy.double)
-        self.hkl = self.hkl[1:]
-
-        # correct data for polarization and lorentzfactor and unit cell volume
-        # see L.S. Zevin : Quantitative X-Ray Diffractometry
-        # page 18ff
-        polarization_factor = (1 +
-                               numpy.cos(numpy.radians(2 * self.ang)) ** 2) / 2
-        lorentz_factor = 1. / (numpy.sin(numpy.radians(self.ang)) ** 2 *
-                               numpy.cos(numpy.radians(self.ang)))
-        unitcellvol = self.mat.lattice.UnitCellVolume()
-        self.data = (self.data * polarization_factor *
-                     lorentz_factor / unitcellvol ** 2)
-
-    def Convolute(self, stepwidth, width, min=0, max=None):
-        """
-        Convolutes the intensity positions with Gaussians with width in
-        momentum space of "width". returns array of angular positions with
-        corresponding intensity
-
-            theta ... array with angular positions
-            int ..... intensity at the positions ttheta
-        """
-
-        if not max:
-            max = 2 * self.k0
-
-        # convolute each peak with a gaussian and add them up
-        qcoord = numpy.arange(min, max, stepwidth)
-        theta = self.Q2Ang(qcoord)
-        intensity = numpy.zeros(theta.size, dtype=numpy.double)
-
-        for i in range(self.ang.size):
-            intensity += math.Gauss1d(qcoord, self.qpos[i], width,
-                                      self.data[i], 0)
-
-        return theta, intensity
+        self.Ang2Q = self._Ang2Q
 
     def _Ang2Q(self, th, deg=True):
         """
@@ -2508,29 +2360,3 @@ class Powder(Experiment):
             th = numpy.degrees(th)
 
         return th
-
-    def __str__(self):
-        """
-        Prints out available information about the material and reflections
-        """
-        ostr = "\nPowder diffraction object \n"
-        ostr += "-------------------------\n"
-        ostr += "Material: " + self.mat.name + "\n"
-        ostr += "Lattice:\n" + self.mat.lattice.__str__()
-        if self.qpos is not None:
-            max = self.data.max()
-            ostr += "\nReflections: \n"
-            ostr += "--------------\n"
-            ostr += ("      h k l     |    tth    |    |Q|    |"
-                     "Int     |   Int (%)\n")
-            ostr += ("   ------------------------------------"
-                     "---------------------------\n")
-            for i in range(self.qpos.size):
-                ostr += ("%15s   %8.4f   %8.3f   %10.2f  %10.2f\n"
-                         % (self.hkl[i].__str__(),
-                            2 * self.ang[i],
-                            self.qpos[i],
-                            self.data[i],
-                            self.data[i] / max * 100.))
-
-        return ostr

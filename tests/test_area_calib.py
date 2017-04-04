@@ -13,9 +13,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright (C) 2015 Dominik Kriegner <dominik.kriegner@gmail.com>
+# Copyright (C) 2015-2016 Dominik Kriegner <dominik.kriegner@gmail.com>
 
-import os.path
+import os
 import unittest
 
 import numpy
@@ -83,8 +83,9 @@ ccdfile = os.path.join(datadir, name, name + "_%05d_eiger",
 fullfilename = ccdfile % (2, 2, 104)
 
 
-@unittest.skipIf(not os.path.isfile(fullfilename),
-                 "additional test data needed (http://xrayutilities.sf.net)")
+@unittest.skipIf('TRAVIS' in os.environ or not os.path.isfile(fullfilename),
+                 "this test is not running on Travis-CI or additional test "
+                 "data are needed (http://xrayutilities.sf.net)")
 class TestArea_calib(unittest.TestCase):
     en = 10000.0  # x-ray energy in eV
     roi = (551, 1065, 0, 1030)  # get data of the good part of the detector
@@ -122,8 +123,6 @@ class TestArea_calib(unittest.TestCase):
         # start calibration
         param, eps = xu.analysis.sample_align.area_detector_calib(
             ang1, ang2, detdata, ['z+', 'y-'], 'x+',
-            start=(0, 0, 0, 0),
-            fix=(False, False, False, False),
             debug=False, plot=False)
 
         self.assertTrue(True)
@@ -164,8 +163,7 @@ class TestArea_calib(unittest.TestCase):
         param, eps = xu.analysis.sample_align.area_detector_calib_hkl(
             sang, ang1, ang2, detdata, imghkl, hxrd, GaAs,
             ['z+', 'y-'], 'x+',
-            start=(0, 0, 0, 0, 0, 0, xu.en2lam(self.en)),
-            fix=(False, False, False, False, False, False, False),
+            start=(None, None, 1., 0, 0, 0, 0, 0, 0, xu.en2lam(self.en)),
             debug=False, plot=False)
 
         self.assertTrue(True)

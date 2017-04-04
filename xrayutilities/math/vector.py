@@ -14,16 +14,19 @@
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
 # Copyright (C) 2009 Eugen Wintersberger <eugen.wintersberger@desy.de>
-# Copyright (C) 2010,2012 Dominik Kriegner <dominik.kriegner@gmail.com>
+# Copyright (C) 2010-2017 Dominik Kriegner <dominik.kriegner@gmail.com>
 
 """
-module with vector operations,
-mostly numpy functionality is used for the vector operation itself,
-however custom error checking is done to ensure vectors of length 3.
+module with vector operations for vectors of size 3,
+since for so short vectors numpy does not give the best performance explicit
+implementation of the equations is performed together with error checking to
+ensure vectors of length 3.
 """
+
+import math
+import re
 
 import numpy
-import re
 
 from .. import config
 from ..exception import InputError
@@ -43,52 +46,79 @@ def VecNorm(v):
     """
     Calculate the norm of a vector.
 
-    required input arguments:
+    Parameters
+    ----------
      v .......... vector as list or numpy array
 
-    return value:
+    Returns
+    -------
      float holding the vector norm
     """
-    vtmp = _checkvec(v)
-    if vtmp.size != 3:
-        raise ValueError("Vector must be of size 3, but has size %d!"
-                         % vtmp.size)
+    if len(v) != 3:
+        raise ValueError("Vector must be of size 3, but has size %d!" % len(v))
 
-    return numpy.linalg.norm(vtmp)
+    return math.sqrt(v[0]**2 + v[1]**2 + v[2]**2)
 
 
 def VecUnit(v):
     """
     Calculate the unit vector of v.
 
-    required input arguments:
+    Parameters
+    ----------
      v ........... vector as list or numpy array
 
-    return value:
+    Returns
+    -------
      numpy array with the unit vector
     """
     vtmp = _checkvec(v)
-    return vtmp / VecNorm(vtmp)
+    return numpy.copy(vtmp) / VecNorm(vtmp)
 
 
 def VecDot(v1, v2):
     """
     Calculate the vector dot product.
 
-    required input arguments:
+    Parameters
+    ----------
      v1 .............. vector as numpy array or list
      v2 .............. vector as numpy array or list
 
-    return value:
+    Returns
+    -------
      float value
     """
-    v1tmp = _checkvec(v1)
-    v2tmp = _checkvec(v2)
-    if v1tmp.size != 3 or v2tmp.size != 3:
+    if len(v1) != 3 or len(v2) != 3:
         raise ValueError("Vectors must be of size 3! (len(v1)=%d len(v2)=%d)"
-                         % (v1tmp.size, v2tmp.size))
+                         % (len(v1), len(v2)))
 
-    return numpy.dot(v1tmp, v2tmp)
+    return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]
+
+
+def VecCross(v1, v2, out=None):
+    """
+    Calculate the vector cross product.
+
+    Parameters
+    ----------
+     v1 .............. vector as numpy array or list
+     v2 .............. vector as numpy array or list
+     out ............. optional output vector
+
+    Returns
+    -------
+     float value
+    """
+    if len(v1) != 3 or len(v2) != 3:
+        raise ValueError("Vectors must be of size 3! (len(v1)=%d len(v2)=%d)"
+                         % (len(v1), len(v2)))
+    if out is None:
+        out = numpy.empty(3)
+    out[0] = v1[1] * v2[2] - v1[2] * v2[1]
+    out[1] = v1[2] * v2[0] - v1[0] * v2[2]
+    out[2] = v1[0] * v2[1] - v1[1] * v2[0]
+    return out
 
 
 def VecAngle(v1, v2, deg=False):
@@ -99,7 +129,8 @@ def VecAngle(v1, v2, deg=False):
 
     alpha = acos((v1.v2)/(norm(v1)*norm(v2)))
 
-    required input arguments:
+    Parameters
+    ----------
      v1 .............. vector as numpy array or list
      v2 .............. vector as numpy array or list
 
@@ -107,15 +138,16 @@ def VecAngle(v1, v2, deg=False):
      deg ............. (default: false) return result in degree
                        otherwise in radiants
 
-    return value:
+    Returns
+    -------
      float value with the angle inclined by the two vectors
     """
     u1 = VecNorm(v1)
     u2 = VecNorm(v2)
 
-    alpha = numpy.arccos(numpy.minimum(1., VecDot(v1, v2) / u1 / u2))
+    alpha = math.acos(min(1., VecDot(v1, v2) / u1 / u2))
     if deg:
-        alpha = numpy.degrees(alpha)
+        alpha = math.degrees(alpha)
 
     return alpha
 
@@ -150,9 +182,9 @@ def getVector(string):
                          "(needs to be one of x,y,z)")
 
     if string[1] == '+':
-        v = numpy.array(v) * (+1)
+        v = numpy.asarray(v) * (+1)
     elif string[1] == '-':
-        v = numpy.array(v) * (-1)
+        v = numpy.asarray(v) * (-1)
     else:
         raise InputError("wrong second character of string given "
                          "(needs to be + or -)")
@@ -169,34 +201,32 @@ def getSyntax(vec):
 
     Parameters
     ----------
-     string   [xyz][+-]
+     vec:   vector of length 3
 
     Returns
     -------
-     vector along the given direction as numpy array
+     [xyz][+-]
     """
-
-    if len(vec) != 3:
+    v = _checkvec(vec)
+    if len(v) != 3:
         raise InputError("no valid 3D vector given")
 
     x = [1, 0, 0]
     y = [0, 1, 0]
     z = [0, 0, 1]
 
-    vec = numpy.array(vec)
-    norm = numpy.linalg.norm
-    if norm(numpy.cross(numpy.cross(x, y), vec)) <= config.EPSILON:
-        if vec[2] >= 0:
+    if VecNorm(numpy.cross(numpy.cross(x, y), v)) <= config.EPSILON:
+        if v[2] >= 0:
             string = 'z+'
         else:
             string = 'z-'
-    elif norm(numpy.cross(numpy.cross(x, z), vec)) <= config.EPSILON:
-        if vec[1] >= 0:
+    elif VecNorm(numpy.cross(numpy.cross(x, z), v)) <= config.EPSILON:
+        if v[1] >= 0:
             string = 'y+'
         else:
             string = 'y-'
-    elif norm(numpy.cross(numpy.cross(y, z), vec)) <= config.EPSILON:
-        if vec[0] >= 0:
+    elif VecNorm(numpy.cross(numpy.cross(y, z), v)) <= config.EPSILON:
+        if v[0] >= 0:
             string = 'x+'
         else:
             string = 'x-'
