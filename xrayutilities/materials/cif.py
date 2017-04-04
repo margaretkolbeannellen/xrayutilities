@@ -79,7 +79,7 @@ class CIFFile(object):
                 self.fid = open(self.filename, "rb")
             except:
                 raise IOError("cannot open CIF file %s" % self.filename)
-
+                
         self.Parse()
         self.SymStruct()
 
@@ -218,7 +218,7 @@ class CIFFile(object):
         in the unit cell for the different types of atoms. The data
         are obtained from the data parsed from the CIF file.
         """
-
+        
         self.unique_positions = []
         for a in self.atoms:
             unique_pos = []
@@ -243,8 +243,19 @@ class CIFFile(object):
                         unique = False
                 if unique:
                     unique_pos.append(pos)
-            element = getattr(elements, el)
-            self.unique_positions.append((element, unique_pos, a[2], a[3]))
+            try:
+                element = getattr(elements, el)
+                self.unique_positions.append((element, unique_pos, a[2], a[3]))
+            except:
+                ## exception built in especially for water molecules.
+                if el.startswith('Wa'):
+                    element = getattr(elements, 'H')
+                    self.unique_positions.append((element, unique_pos, a[2], a[3]))
+                    element = getattr(elements, 'H')
+                    self.unique_positions.append((element, unique_pos, a[2], a[3]))
+                    element = getattr(elements, 'O')
+                    self.unique_positions.append((element, unique_pos, a[2], a[3]))
+
 
     def Lattice(self):
         """
