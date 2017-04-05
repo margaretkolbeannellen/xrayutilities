@@ -26,6 +26,7 @@ on lmfit.
 """
 
 from .smaterials import SMaterial, MaterialList
+from .smaterials import Powder, PowderList
 from .smaterials import Layer, LayerStack
 from .smaterials import CrystalStack, GradedLayerStack
 from .smaterials import PseudomorphicStack001
@@ -40,6 +41,7 @@ from .models import DynamicalModel
 
 from .darwin_theory import GradedBuffer
 from .darwin_theory import DarwinModel
+from .darwin_theory import DarwinModelAlloy
 from .darwin_theory import DarwinModelSiGe001
 from .darwin_theory import DarwinModelGaInAs001
 from .darwin_theory import DarwinModelAlGaAs001
@@ -48,3 +50,10 @@ from .fit import fit_xrr
 
 from .helpers import coplanar_alphai
 from .helpers import get_qz
+
+from .powder import FP_profile
+from .powder import PowderDiffraction
+
+from .powdermodel import PowderModel
+from .powdermodel import Rietveld_error_metrics
+from .powdermodel import plot_powder

@@ -31,6 +31,7 @@ from .vector import VecNorm
 from .vector import VecUnit
 from .vector import VecDot
 from .vector import VecAngle
+from .vector import VecCross
 from .vector import getVector
 from .vector import getSyntax
 
@@ -45,11 +46,13 @@ from .functions import Gauss2d
 from .functions import Gauss3d
 from .functions import TwoGauss2d
 from .functions import Lorentz1d
+from .functions import NormLorentz1d
 from .functions import Lorentz1d_der_x
 from .functions import Lorentz1d_der_p
 from .functions import Lorentz2d
 from .functions import PseudoVoigt1d
 from .functions import PseudoVoigt1dasym
+from .functions import PseudoVoigt1dasym2
 from .functions import PseudoVoigt2d
 from .functions import Gauss1dArea
 from .functions import Gauss2dArea

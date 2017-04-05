@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright (C) 2015-2016 Dominik Kriegner <dominik.kriegner@gmail.com>
+# Copyright (C) 2015-2017 Dominik Kriegner <dominik.kriegner@gmail.com>
 
 import collections
 import copy
@@ -59,10 +59,7 @@ class SMaterial(object):
         self.name = material.name
         self.material = material
         for kw in kwargs:
-            self.__setattr__(kw, kwargs[kw])
-
-    def __setattr__(self, name, value):
-        self.__dict__[name] = value
+            setattr(self, kw, kwargs[kw])
 
     def __radd__(self, other):
         return MaterialList('%s + %s' % (other.name, self.name), other, self)
@@ -76,8 +73,8 @@ class SMaterial(object):
     __rmul__ = __mul__
 
     def __repr__(self):
-        s = '\n{cls}-{name} ('.format(name=self.material.name,
-                                      cls=self.__class__.__name__)
+        s = '{cls}-{name} ('.format(name=self.material.name,
+                                    cls=self.__class__.__name__)
         for k in self.__dict__:
             if k not in ('material', 'name'):
                 s += '{key}: {value}, '.format(key=k, value=getattr(self, k))
@@ -150,7 +147,8 @@ class MaterialList(collections.MutableSequence):
     __rmul__ = __mul__
 
     def __str__(self):
-        s = '{name}\n{l}'.format(name=self.name, l=str(self.list))
+        l = ',\n  '.join([str(entry) for entry in self.list])
+        s = '{name} [\n  {l}\n]'.format(name=self.name, l=l)
         return s
 
     def __repr__(self):
@@ -285,3 +283,97 @@ class PseudomorphicStack111(PseudomorphicStack001):
     orientation is assumed to be 111 and materials must be cubic.
     """
     trans = CoordinateTransform((1, -1, 0), (1, 1, -2), (1, 1, 1))
+
+
+class Powder(SMaterial):
+    """
+    Object describing part of a powder sample. The properties of a powder
+    are:
+
+    material:   an xrayutilties material (Crystal) describing optical and
+                crystal properties of the thin film
+    volume:     powder's volume (in pseudo units, since only the relative
+                volume enters the calculation)
+
+    Optionally also the following can be set:
+     crystallite_size_lor: Lorentzian crystallite size fwhm (m)
+     crystallite_size_gauss: Gaussian crystallite size fwhm (m)
+     strain_lor: extra peak width proportional to tan(theta)
+     strain_gauss: extra peak width proportional to tan(theta)
+    """
+    def __init__(self, material, volume, **kwargs):
+        """
+        constructor for the material saving its properties
+
+        Parameters
+        ----------
+         material:  a Crystal to describe the properties of the powder
+         volume:    volume of the powder (pseudo units)
+         kwargs:    optional keyword arguments with further powder properties.
+           'crystallite_size_lor': Lorentzian crystallite size fwhm (m)
+           'crystallite_size_gauss': Gaussian crystallite size fwhm (m)
+           'strain_lor', 'strain_gauss':
+                extra peak width proportional to tan(theta),
+                typically interpreted as microstrain broadening
+        """
+        for kw in kwargs:
+            if kw not in ('crystallite_size_lor', 'crystallite_size_gauss',
+                          'strain_lor', 'strain_gauss'):
+                raise TypeError('%s is an invalid keyword argument' % kw)
+        kwargs['volume'] = volume
+        super(Powder, self).__init__(material, **kwargs)
+        # make lattice parameters attributes
+        for param, value in material.lattice.free_parameters.items():
+            setattr(self, param, value)
+        # make attributes from atom positions
+        for i, wp in enumerate(material.lattice._wbase):
+            if wp[1][1] is not None:
+                for j, p in enumerate(wp[1][1]):
+                    name = '_'.join(('at%d' % i, wp[0].name,
+                                     wp[1][0], str(j), 'pos'))
+                    setattr(self, name, p)
+        # make attributes from atom occupations
+        for i, wp in enumerate(material.lattice._wbase):
+            name = '_'.join(('at%d' % i, wp[0].name, wp[1][0], 'occupation'))
+            setattr(self, name, wp[2])
+        # make attributes from Debye waller exponents
+        for i, wp in enumerate(material.lattice._wbase):
+            name = '_'.join(('at%d' % i, wp[0].name, wp[1][0], 'biso'))
+            setattr(self, name, wp[3])
+
+    def __setattr__(self, name, value):
+        try:
+            if name in self.material.lattice.free_parameters:
+                setattr(self.material.lattice, name, value)
+            if name.startswith('at'):
+                nsplit = name.split('_')
+                idx = int(nsplit[0][2:])
+                wp = self.material.lattice._wbase[idx]
+                # wyckoff position parameter
+                if nsplit[-1] == 'pos':
+                    pidx = int(nsplit[-2])
+                    wyckpos = (wp[1][0], list(wp[1][1]))
+                    wyckpos[1][pidx] = value
+                    self.material.lattice._wbase[idx] = (wp[0], wyckpos, wp[2],
+                                                         wp[3])
+                # site occupation
+                if nsplit[-1] == 'occupation':
+                    self.material.lattice._wbase[idx] = (wp[0], wp[1], value,
+                                                         wp[3])
+                # site DW exponent
+                if nsplit[-1] == 'biso':
+                    self.material.lattice._wbase[idx] = (wp[0], wp[1], wp[2],
+                                                         value)
+        except:
+            pass
+        super(Powder, self).__setattr__(name, value)
+
+
+class PowderList(MaterialList):
+    """
+    extends the built in list type to enable building a list of Powder
+    by various methods.
+    """
+    def check(self, v):
+        if not isinstance(v, Powder):
+            raise TypeError('PowderList can only contain Powder as entries!')

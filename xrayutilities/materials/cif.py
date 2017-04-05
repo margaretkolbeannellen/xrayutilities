@@ -13,16 +13,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright (C) 2010-2015 Dominik Kriegner <dominik.kriegner@gmail.com>
+# Copyright (C) 2010-2017 Dominik Kriegner <dominik.kriegner@gmail.com>
 
-import re
-import numpy
-import shlex
+import itertools
 import os
+import re
+import shlex
+import warnings
 
-from .lattice import LatticeBase, Lattice
+import numpy
+
 from . import elements
 from .. import config
+from .lattice import Lattice, LatticeBase
+from .spacegrouplattice import SGLattice
 
 re_loop = re.compile(r"^loop_")
 re_symop = re.compile(r"^\s*("
@@ -130,6 +134,11 @@ class CIFFile(object):
                 loop_labels = []
                 symop_loop = False
                 atom_loop = False
+                ax_idx = None
+                ay_idx = None
+                az_idx = None
+                uiso_idx = None
+                occ_idx = None
             elif re_labelline.match(line):
                 if re_cell_a.match(line):
                     self.lattice_const[0] = floatconv(line.split()[1])
@@ -160,11 +169,6 @@ class CIFFile(object):
                             print('XU.material: atom position-loop identified')
                         atom_loop = True
                         alab_idx = len(loop_labels) - 1
-                        ax_idx = None
-                        ay_idx = None
-                        az_idx = None
-                        uiso_idx = None
-                        occ_idx = None
                     elif re_atomx.match(line):
                         ax_idx = len(loop_labels) - 1
                         if config.VERBOSITY >= config.DEBUG:
@@ -257,7 +261,8 @@ class CIFFile(object):
         """
         returns a lattice object with the structure from the CIF file
         """
-
+        warnings.warn("deprecated function -> change to SGLattice",
+                      DeprecationWarning)
         lb = LatticeBase()
         for element, positions, occ, biso in self.unique_positions:
             for pos in positions:
@@ -284,6 +289,25 @@ class CIFFile(object):
         l = Lattice(a1, a2, a3, base=lb)
 
         return l
+
+    def SGLattice(self):
+        """
+        create a SGLattice object with the structure from the CIF file
+        """
+        atoms = []
+        pos = []
+        occ = []
+        biso = []
+        for element, positions, o, b in self.unique_positions:
+            for p in positions:
+                atoms.append(element)
+                pos.append(('1a', p))
+                occ.append(o)
+                biso.append(b)
+
+        return SGLattice(1, *itertools.chain(self.lattice_const,
+                                             self.lattice_angles),
+                         atoms=atoms, pos=pos, occ=occ, b=biso)
 
     def __str__(self):
         """

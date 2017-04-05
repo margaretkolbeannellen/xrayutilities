@@ -54,7 +54,7 @@ class XRDMLMeasurement(object):
         for s in slist:
             # check if scan is complete
             scanstatus = s.get("status")
-            if scanstatus == "Aborted" and len(slist) > 1:
+            if scanstatus in ("Aborted", "Not finished") and len(slist) > 1:
                 if config.VERBOSITY >= config.INFO_LOW:
                     print("XU.io.XRDMLFile: subscan has been aborted "
                           "(part of the data unavailable)!")
@@ -332,10 +332,12 @@ def getxrdml_scan(filetemplate, *motors, **kwargs):
     for mot in motors:
         if mot.lower() in validmotorslow:
             motnames.append(validmotors[validmotorslow.index(mot.lower())])
-        elif mot.lower() in ['p']:
+        elif mot.lower() in ['phi', 'p']:
             motnames.append('Phi')
         elif mot.lower() in ['chi', 'c']:
             motnames.append('Chi')
+        elif mot.lower() in ['psi']:
+            motnames.append('Psi')
         elif mot.lower() in ['tt', 't']:
             motnames.append('2Theta')
         elif mot.lower() in ['om', 'o']:

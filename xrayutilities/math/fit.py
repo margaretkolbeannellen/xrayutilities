@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright (C) 2012-2016 Dominik Kriegner <dominik.kriegner@gmail.com>
+# Copyright (C) 2012-2017 Dominik Kriegner <dominik.kriegner@gmail.com>
 """
 module with a function wrapper to scipy.optimize.leastsq
 for fitting of a 2D function to a peak or a 1D Gauss fit with
@@ -21,20 +21,21 @@ the odr package
 """
 
 from __future__ import print_function
+
+import time
+
 import numpy
 import scipy.optimize as optimize
-import time
 from scipy.odr import odrpack as odr
 from scipy.odr import models
 
 from .. import config
-from .. exception import InputError
-from .misc import fwhm_exp
-from .misc import center_of_mass
-from .functions import Gauss1d, Gauss1d_der_x, Gauss1d_der_p
-from .functions import Lorentz1d, Lorentz1d_der_x, Lorentz1d_der_p
-from .functions import PseudoVoigt1d, PseudoVoigt1d_der_x, PseudoVoigt1d_der_p
-from .functions import PseudoVoigt1dasym
+from ..exception import InputError
+from .functions import (Gauss1d, Gauss1d_der_p, Gauss1d_der_x, Lorentz1d,
+                        Lorentz1d_der_p, Lorentz1d_der_x, PseudoVoigt1d,
+                        PseudoVoigt1d_der_p, PseudoVoigt1d_der_x,
+                        PseudoVoigt1dasym, PseudoVoigt1dasym2)
+from .misc import center_of_mass, fwhm_exp
 
 # python 2to3 compatibility
 try:
@@ -46,6 +47,7 @@ except NameError:
 def linregress(x, y):
     """
     fast linregress to avoid usage of scipy.stats which is slow!
+    NaN values in y are ignored by this function.
 
     Parameters
     ----------
@@ -59,16 +61,21 @@ def linregress(x, y):
     --------
      >>> (k, d), R2 = xu.math.linregress(x, y)
     """
-    p = numpy.polyfit(x, y, 1)
+    mask = numpy.logical_not(numpy.isnan(y))
+    lx, ly = (x[mask], y[mask])
+    if numpy.all(numpy.isclose(lx-lx[0], numpy.zeros_like(lx))):
+        return (0, numpy.mean(ly)), 0
+    else:
+        p = numpy.polyfit(lx, ly, 1)
 
-    # calculation of r-squared
-    f = numpy.polyval(p, x)
-    fbar = numpy.sum(y) / len(y)
-    ssreg = numpy.sum((f-fbar)**2)
-    sstot = numpy.sum((y - fbar)**2)
-    rsq = ssreg / sstot
+        # calculation of r-squared
+        f = numpy.polyval(p, lx)
+        fbar = numpy.sum(ly) / len(ly)
+        ssreg = numpy.sum((f-fbar)**2)
+        sstot = numpy.sum((ly - fbar)**2)
+        rsq = ssreg / sstot
 
-    return p, rsq
+        return p, rsq
 
 
 def peak_fit(xdata, ydata, iparams=[], peaktype='Gauss', maxit=300,
@@ -87,7 +94,7 @@ def peak_fit(xdata, ydata, iparams=[], peaktype='Gauss', maxit=300,
      iparams:   initial paramters for the fit,
                 determined automatically if not specified
      peaktype:  type of peak to fit: 'Gauss', 'Lorentz', 'PseudoVoigt',
-                'PseudoVoigtAsym'
+                'PseudoVoigtAsym', 'PseudoVoigtAsym2'
      maxit:     maximal iteration number of the fit
      background:    type of background, either 'constant' or 'linear'
      plot:      flag to ask for a plot to visually judge the fit.
@@ -141,13 +148,17 @@ def peak_fit(xdata, ydata, iparams=[], peaktype='Gauss', maxit=300,
         fit.pprint()  # prints final message from odrpack
 
     fparam = fit.beta
+    etaidx = []
     if peaktype in ('PseudoVoigt', 'PseudoVoigtAsym'):
         if background == 'linear':
-            etaidx = -2
+            etaidx = [-2, ]
         else:
-            etaidx = -1
-        fparam[etaidx] = 0 if fparam[etaidx] < 0 else fparam[etaidx]
-        fparam[etaidx] = 1 if fparam[etaidx] > 1 else fparam[etaidx]
+            etaidx = [-1, ]
+    elif peaktype == 'PseudoVoigtAsym2':
+        etaidx = [5, 6]
+    for e in etaidx:
+        fparam[e] = 0 if fparam[e] < 0 else fparam[e]
+        fparam[e] = 1 if fparam[e] > 1 else fparam[e]
 
     itlim = False
     if fit.stopreason[0] == 'Iteration limit reached':
@@ -212,6 +223,13 @@ def _getfit_func(peaktype, background):
         else:
             def gfunc(param, x):
                 return PseudoVoigt1dasym(x, *param)
+    elif peaktype == 'PseudoVoigtAsym2':
+        if background == 'linear':
+            def gfunc(param, x):
+                return PseudoVoigt1dasym2(x, *param) + x * param[-1]
+        else:
+            def gfunc(param, x):
+                return PseudoVoigt1dasym2(x, *param)
     else:
         raise InputError("keyword argument peaktype takes invalid value!")
 
@@ -254,31 +272,25 @@ def _check_iparams(iparams, peaktype, background):
     if not any(iparams):
         return
     else:
+        ptypes = {('Gauss', 'constant'): 4, ('Lorentz', 'constant'): 4,
+                  ('Gauss', 'linear'): 5, ('Lorentz', 'linear'): 5,
+                  ('PseudoVoigt', 'constant'): 5, ('PseudoVoigt', 'linear'): 6,
+                  ('PseudoVoigtAsym', 'constant'): 6,
+                  ('PseudoVoigtAsym', 'linear'): 7,
+                  ('PseudoVoigtAsym2', 'constant'): 7,
+                  ('PseudoVoigtAsym2', 'linear'): 8}
         if not all(numpy.isreal(iparams)):
             raise InputError("XU.math.peak_fit: all initial parameters need to"
                              "be real!")
-        elif peaktype in ('Gauss', 'Lorentz') and background == 'constant':
-            if len(iparams) != 4:
-                raise InputError("XU.math.peak_fit: four initial parameters "
+        elif (peaktype, background) in ptypes:
+            nparams = ptypes[(peaktype, background)]
+            if len(iparams) != nparams:
+                raise InputError("XU.math.peak_fit: %d initial parameters "
                                  "are needed for %s-peak with %s background."
-                                 % (peaktype, background))
-        elif ((peaktype in ('Gauss', 'Lorentz') and background == 'linear') or
-              (peaktype == 'PseudoVoigt' and background == 'constant')):
-            if len(iparams) != 5:
-                raise InputError("XU.math.peak_fit: five initial parameters "
-                                 "are needed for %s-peak with %s background."
-                                 % (peaktype, background))
-        elif ((peaktype == 'PseudoVoigt' and background == 'linear') or
-              (peaktype == 'PseudoVoigtAsym' and background == 'constant')):
-            if len(iparams) != 6:
-                raise InputError("XU.math.peak_fit: six initial parameters are"
-                                 " needed for %s-peak with %s background."
-                                 % (peaktype, background))
-        elif peaktype == 'PseudoVoigtAsym' and background == 'linear':
-            if len(iparams) != 7:
-                raise InputError("XU.math.peak_fit: seven initial parameters "
-                                 "are needed for %s-peak with %s background."
-                                 % (peaktype, background))
+                                 % (nparams, peaktype, background))
+        else:
+            raise InputError("XU.math.peak_fit: invalid peak (%s) or "
+                             "background (%s)" % (peaktype, background))
 
 
 def _guess_iparams(xdata, ydata, peaktype, background):
@@ -317,10 +329,13 @@ def _guess_iparams(xdata, ydata, peaktype, background):
     iparams = [ipos, sigma, numpy.max(ld), back]
     if peaktype in ['Lorentz', 'PseudoVoigt']:
         iparams[1] *= 2 * numpy.sqrt(2 * numpy.log(2))
-    if peaktype == 'PseudoVoigtAsym':
+    if peaktype in ['PseudoVoigtAsym', 'PseudoVoigtAsym2']:
         iparams.insert(1, iparams[1])
     if peaktype in ['PseudoVoigt', 'PseudoVoigtAsym']:
         # set ETA parameter to be between Gauss and Lorentz shape
+        iparams.append(0.5)
+    if peaktype == 'PseudoVoigtAsym2':
+        iparams.append(0.5)
         iparams.append(0.5)
     if background == 'linear':
         iparams.append(slope)

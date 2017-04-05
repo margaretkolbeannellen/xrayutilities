@@ -147,43 +147,26 @@ Similar functions exist for other experimental geometries. For grazing incidence
 
 There is on implementation of a GID 2S+2D diffractometer. Be sure to check if the order of the detector circles fits your goniometer, otherwise define one yourself!
 
-There exists also a powder diffraction class, which is able to convert powder scans from angular to reciprocal space and furthermore powder scans of materials can be simulated in a very primitive way, which should only be used to get an idea of the peak positions expected from a certain material.
-
+There exists also a powder diffraction class, which is able to convert powder scans from angular to reciprocal space.
 ::
 
     import xrayutilities as xu
-    import matplotlib.pyplot as plt
+    import numpy
 
-    energy = (2 * 8048 + 8028) / 3. # copper k alpha 1,2
+    energy = 'CuKa12'
 
-    # creating Indium powder
-    In_powder = xu.Powder(xu.materials.In, en=energy)
-    # calculating the reflection strength for the powder
-    In_powder.PowderIntensity()
+    # creating powder experiment
+    xup = xu.PowderExperiment(en=energy)
+    theta = arange(0, 70, 0.01)
+    q = xu.Ang2Q(theta)
 
-    # convoluting the peaks with a gaussian in q-space
-    peak_width = 0.01 # in q-space
-    resolution = 0.0005 # resolution in q-space
-    In_th,In_int = In_powder.Convolute(resolution, peak_width)
 
-    plt.figure()
-    plt.xlabel(r"2Theta (deg)"); plt.ylabel(r"Intensity")
-    # plot the convoluted signal
-    plt.plot(In_th * 2, In_int / In_int.max(), 'k-',
-             label="Indium powder convolution")
-    # plot each peak in a bar plot
-    plt.bar(In_powder.ang * 2, In_powder.data / In_powder.data.max(),
-            width=0.3, bottom=0, linewidth=0, color='r',
-            align='center', orientation='vertical', label="Indium bar plot")
+More information about powdered materials can be obtained from the :class:`~xrayutilities.simpack.powder.PowderDiffraction` class. It contains information about peak positions and intensities
 
-    plt.legend(); plt.set_xlim(15, 100); plt.grid()
-
-One can also print the peak positions and other informations of a powder by
-
- >>> print In_powder
+ >>> print(xu.simpack.PowderDiffraction(xu.materials.In))
     Powder diffraction object
     -------------------------
-    Material: In
+    Powder-In (volume: 1, )
     Lattice:
     a1 = (3.252300 0.000000 0.000000), 3.252300
     a2 = (0.000000 3.252300 0.000000), 3.252300
@@ -196,11 +179,14 @@ One can also print the peak positions and other informations of a powder by
     --------------
           h k l     |    tth    |    |Q|    |    Int     |   Int (%)
        ---------------------------------------------------------------
-        [-1, 0, -1]    32.9611      2.312       217.75      100.00
-         [0, 0, -2]    36.3267      2.541        41.80       19.20
-        [-1, -1, 0]    39.1721      2.732        67.72       31.10
-       [-1, -1, -2]    54.4859      3.731        50.75       23.31
+         [0, 1, -1]    32.9338      2.312       217.24      100.00
+         [0, 0, -2]    36.2964      2.541        41.69       19.19
+         [-1, 1, 0]    39.1392      2.732        67.54       31.09
+       [-1, -1, -2]    54.4383      3.731        50.58       23.28
        ....
+
+If you are interested in simulations of powder diffraction patterns look at section :ref:`pdiff-simulations`
+
 
 Using the ``Gridder`` classes
 -----------------------------
@@ -247,49 +233,40 @@ materials.
 
 Examples show how to define a new material by defining its lattice and deriving a new material, furthermore materials can be used to calculate the structure factor of a Bragg reflection for an specific energy or the energy dependency of its structure factor for anomalous scattering. Data for this are taken from a database which is included in the download.
 
-First defining a new material from scratch is shown. This consists of an lattice with base and the type of atoms with elastic constants of the material::
+First defining a new material from scratch is shown. This is done from the space group and Wyckhoff positions of the atoms inside the unit cell. Depending on the space group number the initialization of a new :class:`~xrayutilities.materials.SGLattice` object expects a different amount of parameters. For a cubic materials only the lattice parameter *a* should be given while for a triclinic materials *a*, *b*, *c*, *alpha*, *beta*, and *gamma* have to be specified. Its similar for the Wyckoff positions. While some Wyckoff positions require only the type of atom others have some free paramters which can be specified. Below we should the definition of zincblende InP as well as for its hexagonal wurtzite polytype as two examples::
 
     import xrayutilities as xu
 
-    # defining a ZincBlendeLattice with two types of atoms
-    # and lattice constant a
-    def ZincBlendeLattice(aa, ab, a):
-        #create lattice base
-        lb = xu.materials.LatticeBase()
-        lb.append(aa, [0, 0, 0])
-        lb.append(aa, [0.5, 0.5, 0])
-        lb.append(aa, [0.5, 0, 0.5])
-        lb.append(aa, [0, 0.5, 0.5])
-        lb.append(ab, [0.25, 0.25, 0.25])
-        lb.append(ab, [0.75, 0.75, 0.25])
-        lb.append(ab, [0.75, 0.25, 0.75])
-        lb.append(ab, [0.25, 0.75, 0.75])
+    # elements (which contain their x-ray optical properties) are loaded from
+    # xrayutilities.materials.elements
+    In = xu.materials.elements.In
+    P = xu.materials.elements.P
 
-        #create lattice vectors
-        a1 = [a, 0, 0]
-        a2 = [0, a, 0]
-        a3 = [0, 0, a]
-
-        l = xu.materials.Lattice(a1, a2, a3, base=lb)
-        return l
-
-    # defining InP, no elastic properties are given,
-    # helper functions exist to create the (6, 6) elastic tensor
-    # for cubic materials
-    atom_In = xu.materials.elements.In
-    atom_P = xu.materials.elements.P
+    # define elastic parameters of the material we use a helper function which
+    # creates the 6x6 tensor needed from the only 3 free parameters of a cubic
+    # material.
     elastictensor = xu.materials.CubicElasticTensor(10.11e+10, 5.61e+10,
                                                     4.56e+10)
-    InP  = xu.materials.Crystal("InP",
-                                ZincBlendeLattice(atom_In, atom_P, 5.8687),
-                                elastictensor)
+    # definition of zincblende InP:
+    InP = xu.materials.Crystal(
+        "InP", xu.materials.SGLattice(216, 5.8687, atoms=[In, P],
+                                      pos=['4a', '4c']),
+        elastictensor)
 
+    # a hexagonal equivalent which shows how parameters change for material
+    # definition with a different space group. Since the elasticity tensor is
+    # optional its not specified here.
+    InPWZ = xu.materials.Crystal(
+        "InP(WZ)", xu.materials.SGLattice(186, 4.1423, 6.8013,
+                                          atoms=[In, P], pos=[('2b', 0),
+                                                              ('2b', 3/8.)]))
 
-InP is of course already included in the xu.materials module and can be loaded by::
+InP (in both variants) is already included in the xu.materials module and can be loaded by::
 
     InP = xu.materials.InP
+    InPWZ = xu.materials.InPWZ
 
-like many other materials.
+Similar definitions exist for many other materials.
 
 
 Using the material properties the calculation of the reflection strength of a Bragg reflection can be done as follows::
@@ -457,14 +434,14 @@ Using the following script determines the parameters necessary for the detector 
 
 The determined detector parameters are:
 
-* pixelwidth of the channels in both directions (2 parameters)
 * center channels: position of the primary beam at the true zero position of the goniometer (considering the outer angle offset) (2 parameters)
+* pixelwidth of the channels in both directions (2 parameters), these two parameters can be replaced by the detector distance (1 parameter) if the pixel size is given as an input
 * detector tilt azimuth in degree from 0 to 360
 * detector tilt angle in degree (>0deg)
 * detector rotation around the primary beam in degree
 * outer angle offset, which describes a offset of the outer detector angle from its true zero position
 
-The misalignment parameters can be fixed during the fitting.
+The misalignment parameters as well as the pixel size can be fixed during the fitting.
 
 .. literalinclude:: example_xu_ccd_parameter.py
     :linenos:

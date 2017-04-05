@@ -1,3 +1,27 @@
+v1.4.1, 2017-04-03
+
+* new materials (Cr, tetragonal BaTiO3)
+* fix bug in DarwinModel
+* fix multiprocessing on MS Windows platforms
+* fix BUG in tetragonal crystals (wrong symmetry was used!)
+
+v1.4.0, 2017-02-09
+
+* fix of negative HKL directions in RelaxationTriangle
+* new SGLattice class which replaces Lattice and allows for easier material
+  definitions
+* old Lattice class is still included but now deprecated and will be removed
+  in >1.5.0
+* new PowderExperiment, PowderDiffraction and PowderModel classes for proper
+  simulation of powder patterns. Thanks to Marcus Mendenhall for his
+  contribution of a Fundamentals parameter approach powder profile
+  calculation.
+* cache database results -> huge speedups in repeated calls with same
+  parameters
+* new file parser for ILL numor files (station D23, maybe more general)
+* add possibility to fix the pixel size when calibrating 2D detectors
+* new normalized Lorentzian function (NormLorentz1d)
+* add fully asymmetric Pseudovoigt (different width and eta)
 * remove unphysical variation of structure factor in kinematical 2-beam model
 * new dynamical multibeam simulations based on the Darwin theory of dynamical
   diffraction
