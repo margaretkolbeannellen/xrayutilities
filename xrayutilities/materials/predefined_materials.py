@@ -218,6 +218,8 @@ LaB6 = Crystal("LaB6", SGLattice(221, 4.15692, atoms=[e.La, e.B],
                                  pos=['1a', ('6f', 0.19750)]))
 Al2O3 = Crystal("Al2O3", SGLattice('167:H', 4.7602, 12.9933,
                 atoms=[e.Al, e.O], pos=[('12c', 0.35216), ('18e', 0.30624)]))
+CeO2 = Crystal("CeO2", SGLattice('225', 5.4124,
+                atoms=[e.Ce, e.O], pos=['4a','8c']))
 
 # materials defined from cif file
 try:
