@@ -153,6 +153,7 @@ SnTe = Crystal("SnTe",
 Al = Crystal("Al", SGLattice(225, 4.04958, atoms=[e.Al, ], pos=['4a', ]))
 Au = Crystal("Au", SGLattice(225, 4.0782, atoms=[e.Au, ], pos=['4a', ]))
 Fe = Crystal("Fe", SGLattice(229, 2.8665, atoms=[e.Fe, ], pos=['2a', ]))
+Na = Crystal("Na", SGLattice(229, 4.235, atoms=[e.Na, ], pos=['2a', ]))
 Cr = Crystal("Cr", SGLattice(229, 2.910, atoms=[e.Cr, ], pos=['2a', ]))
 Co = Crystal("Co", SGLattice(194, 2.5071, 4.0695, atoms=[e.Co, ],
                              pos=['2c', ]))
