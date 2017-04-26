@@ -157,6 +157,10 @@ Na = Crystal("Na", SGLattice(229, 4.235, atoms=[e.Na, ], pos=['2a', ]))
 Cr = Crystal("Cr", SGLattice(229, 2.910, atoms=[e.Cr, ], pos=['2a', ]))
 Co = Crystal("Co", SGLattice(194, 2.5071, 4.0695, atoms=[e.Co, ],
                              pos=['2c', ]))
+ZnS = Crystal('ZnS', SGLattice(194, 3.8227, 6.2607,
+                                   atoms=[e.Zn, e.S], pos=['2b', '2b']))
+Mg = Crystal("Mg", SGLattice(194, 3.2085, 5.2106, atoms=[e.Mg, ],
+                             pos=['2c', ]))
 Ru = Crystal("Ru", SGLattice(194, 2.7059, 4.2815, atoms=[e.Ru, ],
                              pos=['2c', ]))
 Rh = Crystal("Rh", SGLattice(225, 3.8034, atoms=[e.Rh, ], pos=['4a', ]))
